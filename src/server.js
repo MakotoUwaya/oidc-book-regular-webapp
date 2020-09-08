@@ -43,11 +43,76 @@ app.get('/profile', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.status(501).send();
+  const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
+  const responseType = 'id_token';
+  const scope = 'openid profile email';
+  const clientID = process.env.CLIENT_ID;
+  const redirectUri = 'http://localhost:3000/callback';
+  const responseMode = 'form_post';
+  const nonce = crypto.randomBytes(16).toString('hex');
+
+  const options = {
+    maxAge: 1000 * 60 * 15,
+    httpOnly: true,
+    signed: true
+  };
+
+  // TODO: state 含めてないけどCSRF対策大丈夫？
+  res
+    .cookie(nonceCookie, nonce, options)
+    .redirect(
+      authorizationEndpoint +
+        '?response_mode=' +
+        responseMode +
+        '&response_type=' +
+        responseType +
+        '&scope=' +
+        scope +
+        '&client_id=' +
+        clientID +
+        '&redirect_uri=' +
+        redirectUri +
+        '&nonce=' +
+        nonce
+    );
 });
 
 app.post('/callback', async (req, res) => {
-  res.status(501).send();
+  const nonce = req.signedCookies[nonceCookie];
+  delete req.signedCookies[nonceCookie];
+
+  const { id_token } = req.body;
+  const decodeToken = jwt.decode(id_token, { complete: true });
+  const kid = decodeToken.header.kid;
+  const client = jwksClient({
+    jwksUri: oidcProviderInfo['jwks_uri']
+  });
+  client.getSigningKey(kid, (err, key) => {
+    const sigingKey = key.publicKey || key.rsaPublicKey;
+    const verifiedToken = jwt.verify(id_token, sigingKey);
+    const {
+      nonce: decodedNonce,
+      aud: audience,
+      exp: expirationDate,
+      iss: issuer
+    } = verifiedToken;
+    const currentTime = Math.floor(Date.now() / 1000);
+    const expectedAudience = process.env.CLIENT_ID;
+
+    // TODO: stateの検証やってない
+    if (
+      audience !== expectedAudience ||
+      decodedNonce !== nonce ||
+      expirationDate < currentTime ||
+      issuer !== oidcProviderInfo['issuer']
+    ) {
+      return res.status(401).send();
+    }
+
+    req.session.decodedIdToken = verifiedToken;
+    req.session.idToken = id_token;
+    res.redirect('./profile');
+  });
 });
 
 app.get('/to-dos', async (req, res) => {
@@ -58,6 +123,17 @@ app.get('/remove-to-do/:id', async (req, res) => {
   res.status(501).send();
 });
 
-app.listen(3000, () => {
-  console.log(`Server running on http://localhost:3000`);
-});
+const { OIDC_PROVIDER } = process.env;
+const discEnd = `https://${OIDC_PROVIDER}/.well-known/openid-configuration`;
+request(discEnd)
+  .then(res => {
+    oidcProviderInfo = JSON.parse(res);
+    app.listen(3000, () => {
+      console.log(`Server running on http://localhost:3000`);
+    });
+  })
+  .catch(err => {
+    console.error(err);
+    console.error(`Unable to get OIDC endpoints for ${OIDC_PROVIDER}`);
+    process.exit(1);
+  });
