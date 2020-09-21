@@ -3,7 +3,7 @@ const clientId = 'ukLtC7IqjzoKSac0fNE0CqvT3EV6LUB9';
 const audience = 'https://to-dos.spmedomain.com';
 
 const responseType = 'code';
-const redirectURL = 'http://localhost:3002/#callback';
+const redirectURI = 'http://localhost:3002/#callback';
 const scope = 'openid profile email read:to-dos';
 const codeChallengeMethod = 'S256';
 
@@ -27,7 +27,7 @@ async function login() {
     `&client_id=${clientId}` +
     `&code_challenge=${codeChallenge}` +
     `&code_challenge_method=${codeChallengeMethod}` +
-    `&redirect_uri=${redirectURL}`;
+    `&redirect_uri=${redirectURI}`;
 }
 
 async function handleRedirectCallback() {
@@ -39,7 +39,7 @@ async function handleRedirectCallback() {
   codeExchangeFormData.set('client_id', clientId);
   codeExchangeFormData.set('code_verifier', codeVerifier);
   codeExchangeFormData.set('code', code.value);
-  codeExchangeFormData.set('redirect_uri', redirectURL);
+  codeExchangeFormData.set('redirect_uri', redirectURI);
 
   const response = await fetch(codeExchangeURL, {
     method: 'POST',
