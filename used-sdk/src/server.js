@@ -90,8 +90,7 @@ app.get('/to-dos', async (req, res) => {
 
     res.render('to-dos', { toDos });
   } catch (error) {
-    console.error(error);
-    //res.statusCode(error.statusCode).send(error);
+    res.status(error.statusCode).send(error);
   }
 });
 
