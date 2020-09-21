@@ -6,6 +6,7 @@ const handlebars = require('express-handlebars');
 const path = require('path');
 const passport = require('passport');
 const Auth0Strategy = require('passport-auth0');
+const request = require('request-promise');
 const session = require('express-session');
 
 // loading env vars from .env file
@@ -21,6 +22,7 @@ const auth0Strategy = new Auth0Strategy(
   },
   (accessToken, refreshToken, extraParams, profile, done) => {
     profile.idToken = extraParams.id_token;
+    profile.accessToken = extraParams.access_token;
     return done(null, profile);
   }
 );
@@ -58,7 +60,8 @@ app.get('/profile', (req, res) => {
 app.get(
   '/login',
   passport.authenticate('auth0', {
-    scope: 'openid email profile'
+    audience: process.env.API_IDENTIFIER,
+    scope: 'openid profile email read:to-dos'
   })
 );
 
@@ -72,6 +75,28 @@ app.get('/callback', (req, res, next) => {
       res.redirect('/profile');
     });
   })(req, res, next);
+});
+
+app.get('/to-dos', async (req, res) => {
+  const delegatedRequestOptions = {
+    url: 'http://localhost:3100',
+    headers: {
+      Authorization: `Bearer ${req.session.passport.user.accessToken}`,
+    },
+  };
+  try {
+    const delegatedResponse = await request(delegatedRequestOptions);
+    const toDos = JSON.parse(delegatedResponse);
+
+    res.render('to-dos', { toDos });
+  } catch (error) {
+    console.error(error);
+    //res.statusCode(error.statusCode).send(error);
+  }
+});
+
+app.get('/remove-to-do/:id', async (req, res) => {
+  res.status(501).send();
 });
 
 app.listen(3001, () => {
