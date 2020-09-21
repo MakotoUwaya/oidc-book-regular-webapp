@@ -11,7 +11,7 @@
 
   async function loadToDos() {
     try {
-      const response = await fetch('http://localhost:3001/', {
+      const response = await fetch('http://localhost:3100/', {
         method: 'GET',
         headers: {
           authorization: `Bearer ${getAccessToken()}`,
